@@ -102,14 +102,13 @@ class SinglePlayerProtocol(Protocol):
           'regret': regret
       })
 
-    else:
-      return dict({
-          'bandit': bandit_name,
-          'learner': learner_name,
-          'rounds': adaptive_rounds,
-          'total_actions': total_actions,
-          'regret': regret
-      })
+    return dict({
+        'bandit': bandit_name,
+        'learner': learner_name,
+        'rounds': adaptive_rounds,
+        'total_actions': total_actions,
+        'regret': regret
+    })
 
   def _one_trial(self, random_seed: int) -> Dict:
     np.random.seed(random_seed)
@@ -299,8 +298,8 @@ def make_figure_using_cvar(data_filename, figure_filename):
       trials.append(json.loads(line))
     data_df = pd.DataFrame.from_dict(trials)
   sns.lineplot(x='total_actions', y='measure', hue='learner', data=data_df)
-  plt.xlabel(r'$t$')
-  plt.ylabel(r'$\mathrm{CVaR}_{0.05}$')
+  plt.xlabel(r'$t$', fontweight='bold', fontsize=16)
+  plt.ylabel(r'$\mathrm{CVaR}_{0.05}$', fontweight='bold', fontsize=16)
   plt.legend(loc=4)
   plt.savefig(figure_filename, format='pdf')
 
@@ -345,10 +344,10 @@ def make_figure_with_worst_regret():
     #          '--',
     #          label=r'y = %.2f' % reg.coef_[0] + r'$\sqrt{x}$' +
     #                 r' + %.2f' % reg.intercept_)
-  plt.xlabel(r'$\sqrt{t}$')
-  plt.ylabel('regret')
+  plt.xlabel(r'$\sqrt{t}$', fontweight='bold', fontsize=16)
+  plt.ylabel('regret', fontweight='bold', fontsize=16)
   plt.legend(loc='lower right')
-  plt.savefig('final.pdf', format='pdf')
+  plt.savefig('worst_regret.pdf', format='pdf')
 
 
 def generate_random_params(output_filename, product_num):
@@ -357,7 +356,7 @@ def generate_random_params(output_filename, product_num):
     logging.fatal('%s is not empty!' % output_filename)
   preference_params = [1]
   revenues = [0]
-  # pylint: disable=E1101
+  # pylint: disable=no-member
   preference_params.extend(list(np.random.random(product_num)))
   revenues.extend(list(np.random.uniform(0.1, 1, product_num)))
   params = dict({
