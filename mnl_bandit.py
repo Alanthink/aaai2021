@@ -1,7 +1,7 @@
 import os
 import warnings
 
-from typing import Dict
+from typing import List, Dict
 
 import json
 import matplotlib.pyplot as plt
@@ -64,17 +64,17 @@ class SinglePlayerProtocol(Protocol):
   """
   def __init__(self,
                bandit: Bandit,
-               learner: Learner,
+               learners: List[Learner],
                intermediate_regrets=None,
                percentile=None):
     """
     Args:
       bandit: bandit environment
-      learner: learner
+      learners: learners to be compared with
       intermediate_regrets: whether to record intermediate regrets
       percentile:
     """
-    super().__init__(bandit, learner)
+    super().__init__(bandit=bandit, learners=learners)
     self.__intermediate_regrets = \
         intermediate_regrets if intermediate_regrets else []
     self.__percentile = percentile
@@ -117,7 +117,7 @@ class SinglePlayerProtocol(Protocol):
 
     # reset the bandit environment and the learner
     self.bandit.reset()
-    self.learner.reset()
+    self.current_learner.reset()
 
     one_trial_data = []
     # number of rounds to communicate with the bandit environment
@@ -126,7 +126,7 @@ class SinglePlayerProtocol(Protocol):
     total_actions = 0
     while True:
       context = self.bandit.context()
-      actions = self.learner.actions(context)
+      actions = self.current_learner.actions(context)
 
       # stop the game if actions returned by the learner are None
       if not actions:
@@ -135,9 +135,9 @@ class SinglePlayerProtocol(Protocol):
       # record intermediate regrets
       if adaptive_rounds in self.__intermediate_regrets:
         one_trial_data.append(
-            self.form_dict(self.bandit.name, self.learner.name,
+            self.form_dict(self.bandit.name, self.current_learner.name,
                            adaptive_rounds, total_actions,
-                           self.learner.regret(self.bandit),
+                           self.current_learner.regret(self.bandit),
                            stochastic_rewards))
         # clear stochastic rewards after each intermediate regret
         stochastic_rewards = []
@@ -145,7 +145,7 @@ class SinglePlayerProtocol(Protocol):
       feedback = self.bandit.feed(actions)
       for (rewards, _) in feedback:
         stochastic_rewards.extend(list(rewards))
-      self.learner.update(feedback)
+      self.current_learner.update(feedback)
 
       # information update
       for (_, times) in actions:
@@ -155,8 +155,10 @@ class SinglePlayerProtocol(Protocol):
     # record final regret
     one_trial_data.append(
         self.form_dict(self.bandit.name,
-                       self.learner.name, adaptive_rounds, total_actions,
-                       self.learner.regret(self.bandit), stochastic_rewards))
+                       self.current_learner.name,
+                       adaptive_rounds, total_actions,
+                       self.current_learner.regret(self.bandit),
+                       stochastic_rewards))
     return one_trial_data
 
 
@@ -204,13 +206,12 @@ def generate_data(params_filename,
   # create a new file if possible
   with open(data_filename, 'w'):
     pass
-  for learner in learners:
-    game = SinglePlayerProtocol(bandit=bandit,
-                                learner=learner,
-                                intermediate_regrets=intermediate_regrets)
-    game.play(trials=trials,
-              output_filename=data_filename,
-              processes=processes)
+  game = SinglePlayerProtocol(bandit=bandit,
+                              learners=learners,
+                              intermediate_regrets=intermediate_regrets)
+  game.play(trials=trials,
+            output_filename=data_filename,
+            processes=processes)
 
 
 def generate_data_with_cvar(params_filename,
@@ -279,15 +280,14 @@ def generate_data_with_cvar(params_filename,
   with open(data_filename, 'w'):
     pass
 
-  for learner in learners:
-    game = SinglePlayerProtocol(bandit=bandit,
-                                learner=learner,
-                                intermediate_regrets=intermediate_regrets,
-                                percentile=percentile)
-    game.play(trials=trials,
-              output_filename=data_filename,
-              processes=processes,
-              debug=False)
+  game = SinglePlayerProtocol(bandit=bandit,
+                              learners=learners,
+                              intermediate_regrets=intermediate_regrets,
+                              percentile=percentile)
+  game.play(trials=trials,
+            output_filename=data_filename,
+            processes=processes,
+            debug=False)
 
 
 def make_figure_using_cvar(data_filename, figure_filename):
