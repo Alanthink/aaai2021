@@ -90,27 +90,9 @@ class SinglePlayerProtocol(Protocol):
     var = np.percentile(stochasitc_rewards, int(self.__percentile))
     return stochasitc_rewards[stochasitc_rewards <= var].mean()
 
-  def form_dict(self, bandit_name, learner_name, adaptive_rounds,
-                total_actions, regret, stochastic_rewards):
-    if self.__percentile:
-      return dict({
-          'bandit': bandit_name,
-          'learner': learner_name,
-          'rounds': adaptive_rounds,
-          'total_actions': total_actions,
-          'measure': self.measure(np.array(stochastic_rewards)),
-          'regret': regret
-      })
-
-    return dict({
-        'bandit': bandit_name,
-        'learner': learner_name,
-        'rounds': adaptive_rounds,
-        'total_actions': total_actions,
-        'regret': regret
-    })
-
-  def _one_trial(self, random_seed: int) -> Dict:
+  def _one_trial(self, random_seed: int, debug: bool) -> Dict:
+    if debug:
+      logging.set_verbosity(logging.DEBUG)
     np.random.seed(random_seed)
 
     stochastic_rewards = []
@@ -124,6 +106,28 @@ class SinglePlayerProtocol(Protocol):
     adaptive_rounds = 0
     # total actions executed by the bandit environment
     total_actions = 0
+
+    def record_data():
+      if self.__percentile:
+        one_trial_data.append(
+            dict({
+              'bandit': self.bandit.name,
+              'learner': self.current_learner.name,
+              'rounds': adaptive_rounds,
+              'total_actions': total_actions,
+              'measure': self.measure(np.array(stochastic_rewards)),
+              'regret': self.bandit.regret(self.current_learner.goal)
+            }))
+      else:
+        one_trial_data.append(
+            dict({
+                'bandit': self.bandit.name,
+                'learner': self.current_learner.name,
+                'rounds': adaptive_rounds,
+                'total_actions': total_actions,
+                'regret': self.bandit.regret(self.current_learner.goal)
+            }))
+
     while True:
       context = self.bandit.context()
       actions = self.current_learner.actions(context)
@@ -134,11 +138,7 @@ class SinglePlayerProtocol(Protocol):
 
       # record intermediate regrets
       if adaptive_rounds in self.__intermediate_regrets:
-        one_trial_data.append(
-            self.form_dict(self.bandit.name, self.current_learner.name,
-                           adaptive_rounds, total_actions,
-                           self.current_learner.regret(self.bandit),
-                           stochastic_rewards))
+        record_data()
         # clear stochastic rewards after each intermediate regret
         stochastic_rewards = []
 
@@ -153,12 +153,7 @@ class SinglePlayerProtocol(Protocol):
       adaptive_rounds += 1
 
     # record final regret
-    one_trial_data.append(
-        self.form_dict(self.bandit.name,
-                       self.current_learner.name,
-                       adaptive_rounds, total_actions,
-                       self.current_learner.regret(self.bandit),
-                       stochastic_rewards))
+    record_data()
     return one_trial_data
 
 
@@ -190,6 +185,16 @@ def generate_data(params_filename,
                              revenues=revenues,
                              reward=reward,
                              card_limit=card_limit)
+  ucb_bad = UCB(revenues=revenues,
+                horizon=horizon,
+                reward=MeanReward(),
+                name='UCB',
+                card_limit=card_limit)
+  ts_bad = ThompsonSampling(revenues=revenues,
+                            horizon=horizon,
+                            reward=MeanReward(),
+                            name='TS',
+                            card_limit=card_limit)
   ucb = UCB(revenues=revenues,
             horizon=horizon,
             reward=reward,
@@ -201,7 +206,7 @@ def generate_data(params_filename,
                         name='RiskAwareTS',
                         card_limit=card_limit)
 
-  learners = [ucb, ts]
+  learners = [ucb, ts, ucb_bad, ts_bad]
 
   # create a new file if possible
   with open(data_filename, 'w'):
