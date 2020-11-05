@@ -111,12 +111,12 @@ class SinglePlayerProtocol(Protocol):
       if self.__percentile:
         one_trial_data.append(
             dict({
-              'bandit': self.bandit.name,
-              'learner': self.current_learner.name,
-              'rounds': adaptive_rounds,
-              'total_actions': total_actions,
-              'measure': self.measure(np.array(stochastic_rewards)),
-              'regret': self.bandit.regret(self.current_learner.goal)
+                'bandit': self.bandit.name,
+                'learner': self.current_learner.name,
+                'rounds': adaptive_rounds,
+                'total_actions': total_actions,
+                'measure': self.measure(np.array(stochastic_rewards)),
+                'regret': self.bandit.regret(self.current_learner.goal)
             }))
       else:
         one_trial_data.append(
