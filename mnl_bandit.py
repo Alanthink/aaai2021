@@ -351,7 +351,7 @@ def make_figure_with_worst_regret():
     #                 r' + %.2f' % reg.intercept_)
   plt.xlabel(r'$\sqrt{t}$', fontweight='bold', fontsize=16)
   plt.ylabel('regret', fontweight='bold', fontsize=16)
-  plt.legend(loc='lower right')
+  plt.legend(loc='upper left')
   plt.savefig('worst_regret.pdf', format='pdf')
 
 
