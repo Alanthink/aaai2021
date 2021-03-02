@@ -4,6 +4,11 @@ import warnings
 from typing import List, Dict
 
 import json
+# To avoid type 3 fonts
+# See http://phyletica.org/matplotlib-fonts/ for more details.
+import matplotlib
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
