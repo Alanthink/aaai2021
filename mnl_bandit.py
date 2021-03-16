@@ -60,6 +60,8 @@ flags.DEFINE_integer('product_num', 10, 'number of products')
 # for cvar data
 flags.DEFINE_integer('random_neighbors', 10, 'times of local search')
 
+FONT_SIZE = 16
+
 
 class SinglePlayerProtocol(Protocol):
   """Single player protocol
@@ -307,11 +309,14 @@ def make_figure_using_cvar(data_filename, figure_filename):
     for line in lines:
       trials.append(json.loads(line))
     data_df = pd.DataFrame.from_dict(trials)
-  sns.lineplot(x='total_actions', y='measure', hue='learner', data=data_df)
-  plt.xlabel(r'$t$', fontweight='bold', fontsize=16)
-  plt.ylabel(r'$\mathrm{CVaR}_{0.05}$', fontweight='bold', fontsize=16)
-  plt.legend(loc=4)
-  plt.savefig(figure_filename, format='pdf')
+  ax, = sns.lineplot(x='total_actions', y='measure', hue='learner', data=data_df)
+  ax.xaxis.get_offset_text().set_fontsize(FONT_SIZE)
+  plt.xlabel(r'$t$', fontweight='bold', fontsize=FONT_SIZE)
+  plt.ylabel(r'$\mathrm{CVaR}_{0.05}$', fontweight='bold', fontsize=FONT_SIZE)
+  plt.xticks(fontsize=FONT_SIZE)
+  plt.yticks(fontsize=FONT_SIZE)
+  plt.legend(loc=4, fontsize=FONT_SIZE)
+  plt.savefig(figure_filename, format='pdf', bbox_inches = 'tight')
 
 
 def make_figure(data_filename, figure_filename):
@@ -354,10 +359,12 @@ def make_figure_with_worst_regret():
     #          '--',
     #          label=r'y = %.2f' % reg.coef_[0] + r'$\sqrt{x}$' +
     #                 r' + %.2f' % reg.intercept_)
-  plt.xlabel(r'$\sqrt{t}$', fontweight='bold', fontsize=16)
-  plt.ylabel('regret', fontweight='bold', fontsize=16)
-  plt.legend(loc='upper left')
-  plt.savefig('worst_regret.pdf', format='pdf')
+  plt.xticks(fontsize=FONT_SIZE)
+  plt.yticks(fontsize=FONT_SIZE)
+  plt.xlabel(r'$\sqrt{t}$', fontweight='bold', fontsize=FONT_SIZE)
+  plt.ylabel('regret', fontweight='bold', fontsize=FONT_SIZE)
+  plt.legend(loc='upper left', fontsize=FONT_SIZE)
+  plt.savefig('worst_regret.pdf', format='pdf', bbox_inches = 'tight')
 
 
 def generate_random_params(output_filename, product_num):
