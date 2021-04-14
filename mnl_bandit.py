@@ -1,7 +1,7 @@
 import os
 import warnings
 
-from typing import List, Dict
+from typing import List
 
 import json
 # To avoid type 3 fonts
@@ -20,7 +20,8 @@ from absl import flags
 
 from banditpylib.bandits import Bandit, OrdinaryMNLBandit, CvarReward, \
     MeanReward
-from banditpylib.protocols import Protocol
+from banditpylib.data_pb2 import Trial
+from banditpylib.protocols import Protocol, trial_data_messages_to_dict
 from banditpylib.learners.ordinary_mnl_learner import Learner, UCB, \
     ThompsonSampling
 
@@ -73,31 +74,35 @@ class SinglePlayerProtocol(Protocol):
                bandit: Bandit,
                learners: List[Learner],
                intermediate_regrets=None,
-               percentile=None):
+               percentile=None,
+               horizon: int = np.inf): # type: ignore
     """
     Args:
       bandit: bandit environment
       learners: learners to be compared with
       intermediate_regrets: whether to record intermediate regrets
-      percentile:
+      percentile: cvar percentile
+      horizon: horizon of the game (i.e., total number of actions a leaner can
+        make)
     """
     super().__init__(bandit=bandit, learners=learners)
     self.__intermediate_regrets = \
         intermediate_regrets if intermediate_regrets else []
     self.__percentile = percentile
+    self.__horizon = horizon
 
   @property
   def name(self):
     return 'single_player_protocol'
 
   # measure the cvar of the stochastic rewards between intermedaite regrets
-  def measure(self, stochasitc_rewards: np.ndarray) -> float:
+  def __measure(self, stochasitc_rewards: np.ndarray) -> float:
     if len(stochasitc_rewards) == 0:
       return 0
     var = np.percentile(stochasitc_rewards, int(self.__percentile))
     return stochasitc_rewards[stochasitc_rewards <= var].mean()
 
-  def _one_trial(self, random_seed: int, debug: bool) -> Dict:
+  def _one_trial(self, random_seed: int, debug: bool) -> bytes:
     if debug:
       logging.set_verbosity(logging.DEBUG)
     np.random.seed(random_seed)
@@ -108,60 +113,49 @@ class SinglePlayerProtocol(Protocol):
     self.bandit.reset()
     self.current_learner.reset()
 
-    one_trial_data = []
+    trial = Trial()
     # number of rounds to communicate with the bandit environment
-    adaptive_rounds = 0
+    rounds = 0
     # total actions executed by the bandit environment
     total_actions = 0
 
-    def record_data():
+    def add_data():
+      data_item = trial.data_items.add()
       if self.__percentile:
-        one_trial_data.append(
-            dict({
-                'bandit': self.bandit.name,
-                'learner': self.current_learner.name,
-                'rounds': adaptive_rounds,
-                'total_actions': total_actions,
-                'measure': self.measure(np.array(stochastic_rewards)),
-                'regret': self.bandit.regret(self.current_learner.goal)
-            }))
-      else:
-        one_trial_data.append(
-            dict({
-                'bandit': self.bandit.name,
-                'learner': self.current_learner.name,
-                'rounds': adaptive_rounds,
-                'total_actions': total_actions,
-                'regret': self.bandit.regret(self.current_learner.goal)
-            }))
+        data_item.other = self.__measure(np.array(stochastic_rewards))
+      data_item.bandit = self.bandit.name
+      data_item.learner = self.current_learner.name
+      data_item.rounds = rounds
+      data_item.total_actions = total_actions
+      data_item.regret = self.bandit.regret(self.current_learner.goal)
 
-    while True:
+    while total_actions < self.__horizon:
       context = self.bandit.context()
       actions = self.current_learner.actions(context)
 
-      # stop the game if actions returned by the learner are None
-      if not actions:
+      # stop the game if no actions are returned by the learner
+      if not actions.arm_pulls_pairs:
         break
 
       # record intermediate regrets
-      if adaptive_rounds in self.__intermediate_regrets:
-        record_data()
+      if rounds in self.__intermediate_regrets:
+        add_data()
         # clear stochastic rewards after each intermediate regret
         stochastic_rewards = []
 
       feedback = self.bandit.feed(actions)
-      for (rewards, _) in feedback:
-        stochastic_rewards.extend(list(rewards))
+      for arm_rewards_pair in feedback.arm_rewards_pairs:
+        stochastic_rewards.extend(arm_rewards_pair.rewards)
       self.current_learner.update(feedback)
 
       # information update
-      for (_, times) in actions:
-        total_actions += times
-      adaptive_rounds += 1
+      for arm_pulls_pair in actions.arm_pulls_pairs:
+        total_actions += arm_pulls_pair.pulls
+      rounds += 1
 
     # record final regret
-    record_data()
-    return one_trial_data
+    add_data()
+    return trial.SerializeToString()
 
 
 def generate_data(params_filename,
@@ -193,7 +187,6 @@ def generate_data(params_filename,
                              reward=reward,
                              card_limit=card_limit)
   ucb_bad = UCB(revenues=revenues,
-                horizon=horizon,
                 reward=MeanReward(),
                 name='UCB',
                 card_limit=card_limit)
@@ -203,7 +196,6 @@ def generate_data(params_filename,
                             name='TS',
                             card_limit=card_limit)
   ucb = UCB(revenues=revenues,
-            horizon=horizon,
             reward=reward,
             name='RiskAwareUCB',
             card_limit=card_limit)
@@ -220,7 +212,8 @@ def generate_data(params_filename,
     pass
   game = SinglePlayerProtocol(bandit=bandit,
                               learners=learners,
-                              intermediate_regrets=intermediate_regrets)
+                              intermediate_regrets=intermediate_regrets,
+                              horizon=horizon)
   game.play(trials=trials,
             output_filename=data_filename,
             processes=processes)
@@ -258,7 +251,6 @@ def generate_data_with_cvar(params_filename,
                              card_limit=card_limit,
                              zero_best_reward=True)
   ucb_bad = UCB(revenues=revenues,
-                horizon=horizon,
                 reward=MeanReward(),
                 name='UCB',
                 card_limit=card_limit,
@@ -272,7 +264,6 @@ def generate_data_with_cvar(params_filename,
                             use_local_search=True,
                             random_neighbors=random_neighbors)
   ucb = UCB(revenues=revenues,
-            horizon=horizon,
             reward=reward,
             name='RiskAwareUCB',
             card_limit=card_limit,
@@ -295,7 +286,8 @@ def generate_data_with_cvar(params_filename,
   game = SinglePlayerProtocol(bandit=bandit,
                               learners=learners,
                               intermediate_regrets=intermediate_regrets,
-                              percentile=percentile)
+                              percentile=percentile,
+                              horizon=horizon)
   game.play(trials=trials,
             output_filename=data_filename,
             processes=processes,
@@ -303,13 +295,8 @@ def generate_data_with_cvar(params_filename,
 
 
 def make_figure_using_cvar(data_filename, figure_filename):
-  with open(data_filename, 'r') as f:
-    trials = []
-    lines = f.readlines()
-    for line in lines:
-      trials.append(json.loads(line))
-    data_df = pd.DataFrame.from_dict(trials)
-  ax, = sns.lineplot(x='total_actions', y='measure', hue='learner', data=data_df)
+  data_df = trial_data_messages_to_dict(data_filename)
+  ax = sns.lineplot(x='total_actions', y='other', hue='learner', data=data_df)
   ax.xaxis.get_offset_text().set_fontsize(FONT_SIZE)
   plt.xlabel(r'$t$', fontweight='bold', fontsize=FONT_SIZE)
   plt.ylabel(r'$\mathrm{CVaR}_{0.05}$', fontweight='bold', fontsize=FONT_SIZE)
@@ -320,12 +307,7 @@ def make_figure_using_cvar(data_filename, figure_filename):
 
 
 def make_figure(data_filename, figure_filename):
-  with open(data_filename, 'r') as f:
-    trials = []
-    lines = f.readlines()
-    for line in lines:
-      trials.append(json.loads(line))
-    data_df = pd.DataFrame.from_dict(trials)
+  data_df = trial_data_messages_to_dict(data_filename)
   sns.lineplot(x='total_actions', y='regret', hue='learner', data=data_df)
   plt.savefig(figure_filename, format='pdf')
 
@@ -335,15 +317,11 @@ def make_figure_with_worst_regret():
   for filename in os.listdir(os.path.join(os.getcwd(), 'arxiv')):
     # read all data files
     if 'data' in filename:
-      with open(os.path.join('arxiv', filename), 'r') as f:
-        trials = []
-        lines = f.readlines()
-        for line in lines:
-          trials.append(json.loads(line))
-        data_df = data_df.append(pd.DataFrame.from_dict(trials)[[
-            'learner', 'total_actions', 'regret'
-        ]].groupby(['learner', 'total_actions']).mean().reset_index(),
-                                 ignore_index=True)
+      data_df = trial_data_messages_to_dict(os.path.join('arxiv', filename))
+      data_df = data_df.append(pd.DataFrame.from_dict(trials)[[
+          'learner', 'total_actions', 'regret'
+      ]].groupby(['learner', 'total_actions']).mean().reset_index(),
+                               ignore_index=True)
   data_df = data_df.groupby(['learner', 'total_actions']).max().reset_index()
 
   learners = set(data_df['learner'])
