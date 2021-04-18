@@ -114,6 +114,8 @@ class SinglePlayerProtocol(Protocol):
     self.current_learner.reset()
 
     trial = Trial()
+    trial.bandit = self.bandit.name
+    trial.learner = self.current_learner.name
     # number of rounds to communicate with the bandit environment
     rounds = 0
     # total actions executed by the bandit environment
@@ -123,8 +125,6 @@ class SinglePlayerProtocol(Protocol):
       data_item = trial.data_items.add()
       if self.__percentile:
         data_item.other = self.__measure(np.array(stochastic_rewards))
-      data_item.bandit = self.bandit.name
-      data_item.learner = self.current_learner.name
       data_item.rounds = rounds
       data_item.total_actions = total_actions
       data_item.regret = self.bandit.regret(self.current_learner.goal)
