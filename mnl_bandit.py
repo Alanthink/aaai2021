@@ -130,8 +130,7 @@ class SinglePlayerProtocol(Protocol):
       data_item.regret = self.bandit.regret(self.current_learner.goal)
 
     while total_actions < self.__horizon:
-      context = self.bandit.context()
-      actions = self.current_learner.actions(context)
+      actions = self.current_learner.actions(self.bandit.context)
 
       # stop the game if no actions are returned by the learner
       if not actions.arm_pulls_pairs:
@@ -317,7 +316,7 @@ def make_figure_with_worst_regret():
   for filename in os.listdir(os.path.join(os.getcwd(), 'arxiv')):
     # read all data files
     if 'data' in filename:
-      data_df = trial_data_messages_to_dict(os.path.join('arxiv', filename))
+      trials = trial_data_messages_to_dict(os.path.join('arxiv', filename))
       data_df = data_df.append(pd.DataFrame.from_dict(trials)[[
           'learner', 'total_actions', 'regret'
       ]].groupby(['learner', 'total_actions']).mean().reset_index(),
