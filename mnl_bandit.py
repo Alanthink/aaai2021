@@ -18,11 +18,11 @@ from absl import app
 from absl import logging
 from absl import flags
 
-from banditpylib.bandits import Bandit, OrdinaryMNLBandit, CvarReward, \
+from banditpylib.bandits import Bandit, MNLBandit, CvarReward, \
     MeanReward
 from banditpylib.data_pb2 import Trial
 from banditpylib.protocols import Protocol, trial_data_messages_to_dict
-from banditpylib.learners.ordinary_mnl_learner import Learner, UCB, \
+from banditpylib.learners.mnl_bandit_learner import Learner, UCB, \
     ThompsonSampling
 
 logging.set_verbosity(logging.INFO)
@@ -181,7 +181,7 @@ def generate_data(params_filename,
   preference_params = np.array(input_params['preference_params'])
   revenues = np.array(input_params['revenues'])
 
-  bandit = OrdinaryMNLBandit(preference_params=preference_params,
+  bandit = MNLBandit(preference_params=preference_params,
                              revenues=revenues,
                              reward=reward,
                              card_limit=card_limit)
@@ -244,7 +244,7 @@ def generate_data_with_cvar(params_filename,
   preference_params = np.array(input_params['preference_params'])
   revenues = np.array(input_params['revenues'])
 
-  bandit = OrdinaryMNLBandit(preference_params=preference_params,
+  bandit = MNLBandit(preference_params=preference_params,
                              revenues=revenues,
                              reward=reward,
                              card_limit=card_limit,
