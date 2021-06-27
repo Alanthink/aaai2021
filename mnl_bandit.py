@@ -121,13 +121,13 @@ class SinglePlayerProtocol(Protocol):
     # total actions executed by the bandit environment
     total_actions = 0
 
-    def add_data():
-      data_item = trial.data_items.add()
+    def add_result():
+      result = trial.results.add()
       if self.__percentile:
-        data_item.other = self.__measure(np.array(stochastic_rewards))
-      data_item.rounds = rounds
-      data_item.total_actions = total_actions
-      data_item.regret = self.bandit.regret(self.current_learner.goal)
+        result.other = self.__measure(np.array(stochastic_rewards))
+      result.rounds = rounds
+      result.total_actions = total_actions
+      result.regret = self.bandit.regret(self.current_learner.goal)
 
     while total_actions < self.__horizon:
       actions = self.current_learner.actions(self.bandit.context)
@@ -138,7 +138,7 @@ class SinglePlayerProtocol(Protocol):
 
       # record intermediate regrets
       if rounds in self.__intermediate_regrets:
-        add_data()
+        add_result()
         # clear stochastic rewards after each intermediate regret
         stochastic_rewards = []
 
@@ -153,7 +153,7 @@ class SinglePlayerProtocol(Protocol):
       rounds += 1
 
     # record final regret
-    add_data()
+    add_result()
     return trial.SerializeToString()
 
 
