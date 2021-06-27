@@ -133,7 +133,7 @@ class SinglePlayerProtocol(Protocol):
       actions = self.current_learner.actions(self.bandit.context)
 
       # stop the game if no actions are returned by the learner
-      if not actions.arm_pulls_pairs:
+      if not actions.arm_pulls:
         break
 
       # record intermediate regrets
@@ -143,13 +143,13 @@ class SinglePlayerProtocol(Protocol):
         stochastic_rewards = []
 
       feedback = self.bandit.feed(actions)
-      for arm_rewards_pair in feedback.arm_rewards_pairs:
-        stochastic_rewards.extend(arm_rewards_pair.rewards)
+      for arm_feedback in feedback.arm_feedbacks:
+        stochastic_rewards.extend(arm_feedback.rewards)
       self.current_learner.update(feedback)
 
       # information update
-      for arm_pulls_pair in actions.arm_pulls_pairs:
-        total_actions += arm_pulls_pair.pulls
+      for arm_pull in actions.arm_pulls:
+        total_actions += arm_pull.times
       rounds += 1
 
     # record final regret
