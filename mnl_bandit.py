@@ -23,8 +23,8 @@ from banditpylib.bandits import Bandit, MNLBandit, CvarReward, \
     MeanReward
 from banditpylib.data_pb2 import Trial
 from banditpylib.protocols import Protocol
-from banditpylib.learners.mnl_bandit_learner import Learner, UCB, \
-    ThompsonSampling
+from banditpylib.learners import Learner
+from banditpylib.learners.mnl_bandit_learner import UCB, ThompsonSampling
 
 logging.set_verbosity(logging.INFO)
 warnings.simplefilter('ignore')
@@ -74,23 +74,15 @@ class SinglePlayerProtocol(Protocol):
   def __init__(self,
                bandit: Bandit,
                learners: List[Learner],
-               intermediate_regrets=None,
-               percentile=None,
-               horizon: int = np.inf): # type: ignore
+               percentile=None):
     """
     Args:
       bandit: bandit environment
       learners: learners to be compared with
-      intermediate_regrets: whether to record intermediate regrets
       percentile: cvar percentile
-      horizon: horizon of the game (i.e., total number of actions a leaner can
-        make)
     """
     super().__init__(bandit=bandit, learners=learners)
-    self.__intermediate_regrets = \
-        intermediate_regrets if intermediate_regrets else []
     self.__percentile = percentile
-    self.__horizon = horizon
 
   @property
   def name(self):
@@ -103,20 +95,20 @@ class SinglePlayerProtocol(Protocol):
     var = np.percentile(stochasitc_rewards, int(self.__percentile))
     return stochasitc_rewards[stochasitc_rewards <= var].mean()
 
-  def _one_trial(self, random_seed: int, debug: bool) -> bytes:
-    if debug:
+  def _one_trial(self, random_seed: int) -> bytes:
+    if self._debug:
       logging.set_verbosity(logging.DEBUG)
     np.random.seed(random_seed)
 
     stochastic_rewards = []
 
     # reset the bandit environment and the learner
-    self.bandit.reset()
-    self.current_learner.reset()
+    self._bandit.reset()
+    self._current_learner.reset()
 
     trial = Trial()
-    trial.bandit = self.bandit.name
-    trial.learner = self.current_learner.name
+    trial.bandit = self._bandit.name
+    trial.learner = self._current_learner.name
     # number of rounds to communicate with the bandit environment
     rounds = 0
     # total actions executed by the bandit environment
@@ -128,25 +120,25 @@ class SinglePlayerProtocol(Protocol):
         result.other = self.__measure(np.array(stochastic_rewards))
       result.rounds = rounds
       result.total_actions = total_actions
-      result.regret = self.bandit.regret(self.current_learner.goal)
+      result.regret = self._bandit.regret(self._current_learner.goal)
 
-    while total_actions < self.__horizon:
-      actions = self.current_learner.actions(self.bandit.context)
+    while total_actions < self._horizon:
+      actions = self._current_learner.actions(self._bandit.context)
 
       # stop the game if no actions are returned by the learner
       if not actions.arm_pulls:
         break
 
       # record intermediate regrets
-      if rounds in self.__intermediate_regrets:
+      if rounds in self._intermediate_horizons:
         add_result()
         # clear stochastic rewards after each intermediate regret
         stochastic_rewards = []
 
-      feedback = self.bandit.feed(actions)
+      feedback = self._bandit.feed(actions)
       for arm_feedback in feedback.arm_feedbacks:
         stochastic_rewards.extend(arm_feedback.rewards)
-      self.current_learner.update(feedback)
+      self._current_learner.update(feedback)
 
       # information update
       for arm_pull in actions.arm_pulls:
@@ -210,13 +202,12 @@ def generate_data(params_filename,
   # create a new file if possible
   with open(data_filename, 'w'):
     pass
-  game = SinglePlayerProtocol(bandit=bandit,
-                              learners=learners,
-                              intermediate_regrets=intermediate_regrets,
-                              horizon=horizon)
+  game = SinglePlayerProtocol(bandit=bandit, learners=learners)
   game.play(trials=trials,
             output_filename=data_filename,
-            processes=processes)
+            processes=processes,
+            intermediate_horizons=intermediate_regrets,
+            horizon=horizon)
 
 
 def generate_data_with_cvar(params_filename,
@@ -285,13 +276,13 @@ def generate_data_with_cvar(params_filename,
 
   game = SinglePlayerProtocol(bandit=bandit,
                               learners=learners,
-                              intermediate_regrets=intermediate_regrets,
-                              percentile=percentile,
-                              horizon=horizon)
+                              percentile=percentile)
   game.play(trials=trials,
             output_filename=data_filename,
             processes=processes,
-            debug=False)
+            debug=False,
+            intermediate_horizons=intermediate_regrets,
+            horizon=horizon)
 
 
 def make_figure_using_cvar(data_filename, figure_filename):
